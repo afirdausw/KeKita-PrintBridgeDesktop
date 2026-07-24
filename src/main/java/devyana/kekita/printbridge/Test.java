@@ -1,0 +1,12 @@
+package devyana.kekita.printbridge;
+
+public class Test {
+    public static void main(String[] args) throws Exception {
+
+        while (true) {
+            System.out.println("Running...");
+            Thread.sleep(1000);
+        }
+
+    }
+}

@@ -1,0 +1,16 @@
+{
+  "application": {
+    "name": "PrintBridge",
+    "version": "1.0.0"
+  },
+
+  "api": {
+    "port": 8080
+  },
+
+  "printer": {
+    "paperSize": 58,
+    "autoReconnect": true,
+    "defaultPrinter": ""
+  }
+}
