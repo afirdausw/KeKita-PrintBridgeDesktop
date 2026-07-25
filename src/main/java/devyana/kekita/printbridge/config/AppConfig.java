@@ -14,7 +14,17 @@ public class AppConfig {
     }
 
     public static ApplicationConfig get() {
+        if (config == null) {
+            load();
+        }
         return config;
+    }
+
+    public static boolean save() {
+        if (config != null) {
+            return ConfigLoader.save(config);
+        }
+        return false;
     }
 
 }
