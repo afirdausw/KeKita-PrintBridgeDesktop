@@ -6,9 +6,13 @@ import devyana.kekita.printbridge.config.AppConfig;
 import devyana.kekita.printbridge.printer.Printer;
 import devyana.kekita.printbridge.printer.PrinterFinder;
 import devyana.kekita.printbridge.printer.VirtualPrinter;
+import devyana.kekita.printbridge.util.EscPosImageUtil;
 import devyana.kekita.printbridge.util.Log;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -53,10 +57,54 @@ public class PrinterService {
             printerName = VirtualPrinter.VIRTUAL_PRINTER_NAME;
         }
 
+        byte[] finalBytes = decoratePayloadWithHardwareOptions(bytes);
+
         Printer printer = PrinterFinder.findPrinter(printerName);
-        Log.info("Mencetak via [" + printer.getType() + "] -> Target: " + printer.getName() + " (" + bytes.length + " bytes)...");
-        printer.print(bytes);
+        Log.info("Mencetak via [" + printer.getType() + "] -> Target: " + printer.getName() + " (" + finalBytes.length + " bytes)...");
+        printer.print(finalBytes);
         Log.success("Pencetakan berhasil diproses oleh [" + printer.getName() + "]");
+    }
+
+    private byte[] decoratePayloadWithHardwareOptions(byte[] rawPayload) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+
+        // 1. Prepend Logo jika fitur enableLogo aktif dan file logo ada
+        if (AppConfig.get().getPrinter().isEnableLogo()) {
+            String logoPath = AppConfig.get().getPrinter().getLogoPath();
+            File logoFile = new File(logoPath);
+            if (logoFile.exists()) {
+                try {
+                    BufferedImage logoImage = ImageIO.read(logoFile);
+                    if (logoImage != null) {
+                        int paperSize = AppConfig.get().getPrinter().getPaperSize();
+                        int maxLogoWidth = (paperSize == 80) ? 200 : 150;
+                        BufferedImage scaledLogo = EscPosImageUtil.scaleImageIfNeeded(logoImage, maxLogoWidth);
+
+                        byte[] logoBytes = EscPosImageUtil.generateRasterBytes(scaledLogo);
+                        baos.write(logoBytes);
+                    }
+                } catch (Exception e) {
+                    Log.warn("Gagal merakit byte logo untuk cetakan: " + e.getMessage());
+                }
+            }
+        }
+
+        // 2. Main Payload Data
+        if (rawPayload != null && rawPayload.length > 0) {
+            baos.write(rawPayload);
+        }
+
+        // 3. Pulsa Cash Drawer jika enabled (ESC p 0 25 250)
+        if (AppConfig.get().getPrinter().isEnableCashDrawer()) {
+            baos.write(new byte[]{0x1B, 0x70, 0x00, 0x19, (byte) 0xFA});
+        }
+
+        // 4. Auto Cut jika enabled (GS V 65 1)
+        if (AppConfig.get().getPrinter().isAutoCut()) {
+            baos.write(new byte[]{0x1D, 0x56, 0x41, 0x01});
+        }
+
+        return baos.toByteArray();
     }
 
     private byte[] extractBytesFromRequest(PrintRequest request) throws IOException {
@@ -82,8 +130,6 @@ public class PrinterService {
             baos.write(new byte[]{0x1B, 0x40});
             baos.write(request.getText().getBytes(StandardCharsets.UTF_8));
             baos.write(new byte[]{0x0A, 0x0A});
-            // GS V 65 1 (Cut)
-            baos.write(new byte[]{0x1D, 0x56, 0x41, 0x01});
             return baos.toByteArray();
         }
 
@@ -103,10 +149,7 @@ public class PrinterService {
         int paperSize = AppConfig.get().getPrinter().getPaperSize();
         byte[] testBytes = generateTestPrintPayload(paperSize);
 
-        Printer printer = PrinterFinder.findPrinter(printerName);
-        Log.info("Mengirim Test Print (" + paperSize + "mm) via [" + printer.getType() + "] -> Target: " + printer.getName() + "...");
-        printer.print(testBytes);
-        Log.success("Test Print (" + paperSize + "mm) berhasil diproses oleh [" + printer.getName() + "]");
+        printBytesToPrinter(printerName, testBytes);
     }
 
     private byte[] generateTestPrintPayload(int paperSize) throws IOException {
@@ -135,9 +178,6 @@ public class PrinterService {
         sb.append("\n\n");
 
         baos.write(sb.toString().getBytes(StandardCharsets.US_ASCII));
-
-        // Cut Paper GS V 65 1
-        baos.write(new byte[]{0x1D, 0x56, 0x41, 0x01});
 
         return baos.toByteArray();
     }

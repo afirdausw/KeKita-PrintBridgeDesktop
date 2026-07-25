@@ -9,6 +9,10 @@
   "printer" : {
     "paperSize" : 80,
     "autoReconnect" : false,
-    "defaultPrinter" : "COM9 (Standard Serial over Bluetooth link)"
+    "defaultPrinter" : "COM9 (Standard Serial over Bluetooth link)",
+    "enableLogo" : true,
+    "logoPath" : "config/logo.png",
+    "enableCashDrawer" : false,
+    "autoCut" : true
   }
 }
